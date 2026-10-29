@@ -1,0 +1,26 @@
+{
+  "name": "oomnieye-theme-qa",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed --workers=1",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report",
+    "allure:generate": "allure generate allure-results --clean -o allure-report",
+    "allure:open": "allure open allure-report",
+    "allure:serve": "allure serve allure-results",
+    "clean:allure": "node -e \"const fs = require('fs'); fs.rmSync('allure-results', { recursive: true, force: true }); fs.rmSync('allure-report', { recursive: true, force: true });\"",
+    "typecheck": "tsc --noEmit",
+    "explore": "tsx scripts/explore.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^22.15.0",
+    "allure-commandline": "^2.46.1",
+    "allure-playwright": "^3.14.0",
+    "dotenv": "^16.4.7",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.3"
+  }
+}
