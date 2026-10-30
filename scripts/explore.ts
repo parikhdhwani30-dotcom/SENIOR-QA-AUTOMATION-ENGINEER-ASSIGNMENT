@@ -1,15 +1,24 @@
 import { chromium } from '@playwright/test';
 import 'dotenv/config';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { model } from '../config/app-model';
-import { LoginPage } from '../pages/LoginPage';
 
 async function main() {
   const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext();
   try {
     const page = await context.newPage();
-    await new LoginPage(page).signIn();
+    const sessionFile = path.resolve(__dirname, '../.auth/session.json');
+    if (existsSync(sessionFile)) {
+      const session = JSON.parse(readFileSync(sessionFile, 'utf-8'));
+      await page.addInitScript((data) => {
+        for (const [k, v] of Object.entries(data)) {
+          window.sessionStorage.setItem(k, v as string);
+        }
+      }, session);
+    }
+    await page.goto(model.routes.dashboard);
     console.log('Explore Dashboard and theme settings using the browser.');
     console.log('Script does not record passwords, network payloads, or screenshot contents.');
     console.log('Close browser window when finished.');

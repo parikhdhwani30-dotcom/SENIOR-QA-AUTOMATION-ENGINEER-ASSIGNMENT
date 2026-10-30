@@ -1,11 +1,21 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Page, type Locator } from '@playwright/test';
 import { BasePage } from './BasePage';
 import { model } from '../config/app-model';
 import { locate } from '../utils/locators';
 
 export class ReportPage extends BasePage {
-  constructor(page: Page) { super(page); }
-  async assertLoaded() { await expect(locate(this.page, model.report.ready)).toBeVisible(); }
+  readonly reportHeading: Locator;
+  readonly reportRoot: Locator;
+
+  constructor(page: Page) {
+    super(page);
+    this.reportHeading = locate(page, model.report.ready);
+    this.reportRoot = locate(page, model.report.root);
+  }
+
+  async assertLoaded() {
+    await expect(this.reportHeading).toBeVisible();
+  }
   async inspectUI(): Promise<void> {
     const root = locate(this.page, model.report.root);
     await expect(root).toBeVisible();

@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 import { model } from '../config/app-model';
-import { LoginPage } from '../pages/LoginPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { ReportPage } from '../pages/ReportPage';
 import type { ThemeState } from '../pages/BasePage';
@@ -8,9 +9,21 @@ import type { ThemeState } from '../pages/BasePage';
 const options = model.theme.options.map(o => o.name);
 const verified = process.env.APP_MODEL_VERIFIED === 'true';
 
+const sessionFile = path.resolve(__dirname, '../.auth/session.json');
+const getSession = () => fs.existsSync(sessionFile) ? JSON.parse(fs.readFileSync(sessionFile, 'utf-8')) : {};
+
 test.describe('OomniEye theme consistency', () => {
   test.skip(!verified, 'Exploratory mapping required: update config/app-model.ts and APP_MODEL_VERIFIED=true.');
-  test.beforeEach(async ({ page }) => { await new LoginPage(page).signIn(); });
+
+  test.beforeEach(async ({ page }) => {
+    // Inject session storage saved by globalSetup
+    await page.addInitScript((data) => {
+      for (const [k, v] of Object.entries(data)) {
+        window.sessionStorage.setItem(k, v as string);
+      }
+    }, getSession());
+    await page.goto(model.routes.dashboard);
+  });
 
   async function applyDistinctTheme(page: Page) {
     const dashboard = new DashboardPage(page);
@@ -98,17 +111,32 @@ test.describe('OomniEye theme consistency', () => {
   });
   test('TH-06 Open Report Module directly or in a new tab', async ({ page }, testInfo) => {
     const { state } = await applyDistinctTheme(page);
-    await new DashboardPage(page).openReport();
+    
+    // 1. Open Report Module directly in current tab and verify theme
+    const dashboard = new DashboardPage(page);
+    await dashboard.openReport();
+    const report = new ReportPage(page);
+    await report.assertLoaded();
+    assertSameTheme(await report.getThemeState(), state, 'Direct Report navigation');
+    await testInfo.attach('th06-direct-report-module-screenshot', {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: 'image/png',
+    });
 
-    // Open Report Module in a new tab within the same authenticated context
+    // 2. Open Report Module in a new tab within the same authenticated context
     const newTab = await page.context().newPage();
     try {
-      await new LoginPage(newTab).signIn();
-      const dashboard = new DashboardPage(newTab);
-      await dashboard.openReport();
-      const report = new ReportPage(newTab);
-      await report.assertLoaded();
-      assertSameTheme(await report.getThemeState(), state, 'New tab Report module');
+      await newTab.addInitScript((data) => {
+        for (const [k, v] of Object.entries(data)) {
+          window.sessionStorage.setItem(k, v as string);
+        }
+      }, getSession());
+      await newTab.goto(model.routes.dashboard);
+      const newTabDashboard = new DashboardPage(newTab);
+      await newTabDashboard.openReport();
+      const newTabReport = new ReportPage(newTab);
+      await newTabReport.assertLoaded();
+      assertSameTheme(await newTabReport.getThemeState(), state, 'New tab Report module');
 
       // Explicitly attach screenshot of the NEW TAB showing the Report Module in the selected theme
       await testInfo.attach('th06-new-tab-report-module-screenshot', {
