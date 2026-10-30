@@ -9,12 +9,14 @@ async function globalSetup(config: FullConfig) {
   const storagePath = path.resolve(__dirname, './.auth/session.json');
 
   /* Clean Allure folders */
+  const resultsDir = path.resolve(__dirname, 'allure-results');
+  const reportDir = path.resolve(__dirname, 'allure-report');
   try {
-    if (fs.existsSync('allure-results')) {
-      fs.rmSync('allure-results', { recursive: true, force: true });
+    if (fs.existsSync(resultsDir)) {
+      fs.rmSync(resultsDir, { recursive: true, force: true });
     }
-    if (fs.existsSync('allure-report')) {
-      fs.rmSync('allure-report', { recursive: true, force: true });
+    if (fs.existsSync(reportDir)) {
+      fs.rmSync(reportDir, { recursive: true, force: true });
     }
   } catch (err) {
     console.warn('Allure cleanup warning:', err);

@@ -17,7 +17,7 @@ export default defineConfig({
     ['list'],
     ['html', { open: 'never' }],
     ['json', { outputFile: 'test-results/results.json' }],
-    ['allure-playwright', { outputFolder: 'allure-results' }],
+    ['allure-playwright', { outputFolder: path.resolve(__dirname, 'allure-results') }],
   ],
   use: {
     baseURL: process.env.BASE_URL ?? 'https://base-application-stage.oomnieye.com/',
