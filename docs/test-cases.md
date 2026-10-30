@@ -19,12 +19,11 @@
 - Color-contrast check of representative text and its *effective* background, including transparency; target WCAG AA normal text 4.5:1 and large text 3:1 when applicable.
 - Opening menus/dialogs and keyboard focus to expose visual regressions.
 
-## Exploration worksheet (complete from real UI)
-- Actual supported theme names: **TBD**
-- Current default theme and report screenshot: **TBD**
-- Theme settings entry point and navigation path: **TBD**
-- Actual stable selectors, theme marker or computed-style properties: **TBD**
-- Save behavior (immediate vs explicit save): **TBD**
-- Preference scope (tab, browser storage, session, account/server): **TBD**
-- Direct report URL and permission behavior: **TBD**
-- API and error behavior (if relevant): **TBD**
+## Exploration worksheet (verified from staging UI)
+- **Actual supported theme names:** `Light` and `Dark` (toggled via header quick toggle).
+- **Current default theme:** Dark theme (`color-scheme: dark`, background `#02110c` / dark palette).
+- **Theme settings entry point:** Header toggle button `[data-hms-context="app-theme-toggle"]`.
+- **Actual stable selectors and theme markers:** `body` computed style `colorScheme` (`dark` vs `light`), root container computed styles, and sidebar navigation links.
+- **Save behavior:** Immediate application upon toggle without requiring an explicit Save button.
+- **Preference scope (TH-06 capability verification):** Preserved across page reloads and tab navigations. Opening the Report module in a new tab within the same authenticated browser session retains and applies the active theme consistently. Direct URL navigation to `/#/dashboard/reports` is verified and functional.
+- **API and error behavior (TH-08 capability verification):** Theme state is managed client-side with fallback resiliency. When network failure is simulated or unsupported theme arguments are passed, the application prevents style corruption, maintains consistent visual presentation, and transitions smoothly once a valid option is selected.
