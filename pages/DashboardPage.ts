@@ -1,25 +1,32 @@
 import { expect, type Page, type Locator } from '@playwright/test';
 import { BasePage } from './BasePage';
-import { model } from '../config/app-model';
-import { locate } from '../utils/locators';
 
+/**
+ * DashboardPage represents the OomniEye Dashboard view.
+ * Contains locators and actions specific to the Dashboard.
+ */
 export class DashboardPage extends BasePage {
+  // 1. Locators defined at top (Page Factory / Page Object pattern)
   readonly dashboardLink: Locator;
   readonly reportBuilderLink: Locator;
-  readonly themeToggleBtn: Locator;
 
   constructor(page: Page) {
     super(page);
-    this.dashboardLink = locate(page, model.dashboard.ready);
-    this.reportBuilderLink = locate(page, model.dashboard.reportNavigation);
-    this.themeToggleBtn = locate(page, model.theme.settingsTrigger);
+    this.dashboardLink = page.getByRole('link', { name: 'Dashboard' });
+    this.reportBuilderLink = page.getByRole('link', { name: 'Report Builder' });
   }
 
-  async assertLoaded() {
+  /**
+   * Asserts that the Dashboard page has successfully loaded.
+   */
+  async assertLoaded(): Promise<void> {
     await expect(this.dashboardLink).toBeVisible();
   }
 
-  async openReport() {
+  /**
+   * Clicks on the Report Builder link in the sidebar navigation.
+   */
+  async openReport(): Promise<void> {
     await this.reportBuilderLink.click();
   }
 }

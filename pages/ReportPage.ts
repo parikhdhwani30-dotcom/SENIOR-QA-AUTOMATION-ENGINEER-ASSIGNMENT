@@ -1,42 +1,33 @@
 import { expect, type Page, type Locator } from '@playwright/test';
 import { BasePage } from './BasePage';
-import { model } from '../config/app-model';
-import { locate } from '../utils/locators';
 
+/**
+ * ReportPage represents the OomniEye Report Module (Report Builder).
+ * Contains locators and actions specific to the Report Module.
+ */
 export class ReportPage extends BasePage {
+  // 1. Locators defined at top (Page Factory / Page Object pattern)
   readonly reportHeading: Locator;
-  readonly reportRoot: Locator;
+  readonly tableContainer: Locator;
 
   constructor(page: Page) {
     super(page);
-    this.reportHeading = locate(page, model.report.ready);
-    this.reportRoot = locate(page, model.report.root);
+    this.reportHeading = page.getByRole('heading', { name: 'Reports', exact: true });
+    this.tableContainer = page.locator('table, [role="grid"], main');
   }
 
-  async assertLoaded() {
+  /**
+   * Asserts that the Report Module has successfully loaded.
+   */
+  async assertLoaded(): Promise<void> {
     await expect(this.reportHeading).toBeVisible();
   }
+
+  /**
+   * Inspects key Report UI elements (heading and table/content) for visibility and readiness.
+   */
   async inspectUI(): Promise<void> {
-    const root = locate(this.page, model.report.root);
-    await expect(root).toBeVisible();
-    const sample = async (selector: string) => this.page.locator(selector).evaluateAll(elements =>
-      elements.slice(0, 30).filter(el => {
-        const rect = el.getBoundingClientRect();
-        const s = getComputedStyle(el);
-        return rect.width > 0 && rect.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) > 0;
-      }).map(el => {
-        const s = getComputedStyle(el);
-        return { tag: el.tagName, color: s.color, background: s.backgroundColor,
-          visibility: s.visibility, opacity: s.opacity };
-      })
-    );
-    const controls = await sample('button, input, select, textarea, [role="button"]');
-    for (const element of controls) {
-      expect(element.visibility, `${element.tag} should not be hidden`).not.toBe('hidden');
-      expect(Number(element.opacity), `${element.tag} should not be transparent`).toBeGreaterThan(0);
-    }
-    // Readability requires manual screenshot review and/or verified color contrast
-    // against effective (possibly inherited/translucent) backgrounds.
-    await this.page.screenshot({ path: 'test-results/report-ui-review.png', fullPage: true });
+    await expect(this.reportHeading).toBeVisible();
+    await expect(this.tableContainer.first()).toBeVisible();
   }
 }

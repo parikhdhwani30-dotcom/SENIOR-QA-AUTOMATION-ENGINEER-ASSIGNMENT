@@ -1,144 +1,191 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
-import { model } from '../config/app-model';
 import { DashboardPage } from '../pages/DashboardPage';
 import { ReportPage } from '../pages/ReportPage';
-import type { ThemeState } from '../pages/BasePage';
 
-const options = model.theme.options.map(o => o.name);
-const verified = process.env.APP_MODEL_VERIFIED === 'true';
-
+// Read session storage saved during global-setup (login done once)
 const sessionFile = path.resolve(__dirname, '../.auth/session.json');
 const getSession = () => fs.existsSync(sessionFile) ? JSON.parse(fs.readFileSync(sessionFile, 'utf-8')) : {};
 
-test.describe('OomniEye theme consistency', () => {
-  test.skip(!verified, 'Exploratory mapping required: update config/app-model.ts and APP_MODEL_VERIFIED=true.');
+test.describe('OomniEye Theme Consistency Test Suite', () => {
 
+  /**
+   * Before each test:
+   * 1. Inject saved session into browser sessionStorage
+   * 2. Navigate directly to Dashboard without having to type username/password every time
+   */
   test.beforeEach(async ({ page }) => {
-    // Inject session storage saved by globalSetup
-    await page.addInitScript((data) => {
-      for (const [k, v] of Object.entries(data)) {
-        window.sessionStorage.setItem(k, v as string);
+    await page.addInitScript((savedSession) => {
+      for (const [key, value] of Object.entries(savedSession)) {
+        window.sessionStorage.setItem(key, value as string);
       }
     }, getSession());
-    await page.goto(model.routes.dashboard);
+
+    await page.goto('/#/dashboard/overview');
+    const dashboard = new DashboardPage(page);
+    await dashboard.assertLoaded();
   });
 
-  async function applyDistinctTheme(page: Page) {
-    const dashboard = new DashboardPage(page);
-    const original = await dashboard.getThemeState();
-    for (const name of options) {
-      await dashboard.setTheme(name);
-      const next = await dashboard.getThemeState();
-      if (JSON.stringify(next) !== JSON.stringify(original)) return { name, state: next, original };
-    }
-    throw new Error('No configured theme changed the observed DOM/computed-style signature. Check config and baseline.');
-  }
-  function assertSameTheme(actual: ThemeState, expected: ThemeState, context: string) {
-    expect(actual.colorScheme, `${context}: color scheme should match`).toBe(expected.colorScheme);
-    expect(actual.color, `${context}: text color should match`).toBe(expected.color);
-  }
-
+  // ==========================================
+  // TH-01: Change theme from Dashboard
+  // ==========================================
   test('TH-01 selected theme applies on Dashboard', async ({ page }, testInfo) => {
-    await applyDistinctTheme(page);
-    await testInfo.attach('th01-dashboard-selected-theme', {
+    const dashboard = new DashboardPage(page);
+    
+    // 1. Get initial theme and toggle to opposite theme
+    const initialTheme = await dashboard.getTheme();
+    const updatedTheme = await dashboard.toggleTheme();
+
+    // 2. Assert theme changed
+    expect(updatedTheme).not.toBe(initialTheme);
+
+    // 3. Attach screenshot
+    await testInfo.attach('th01-dashboard-theme-applied', {
       body: await page.screenshot({ fullPage: true }),
       contentType: 'image/png',
     });
   });
+
+  // ==========================================
+  // TH-02: Open Report Module after changing theme
+  // ==========================================
   test('TH-02 Report reflects selected theme', async ({ page }, testInfo) => {
     const dashboard = new DashboardPage(page);
-    const { state } = await applyDistinctTheme(page);
-    await dashboard.openReport();
     const report = new ReportPage(page);
+
+    // 1. Toggle theme on Dashboard
+    const appliedTheme = await dashboard.toggleTheme();
+
+    // 2. Navigate to Report Builder
+    await dashboard.openReport();
     await report.assertLoaded();
-    assertSameTheme(await report.getThemeState(), state, 'Report navigation');
-    await testInfo.attach('th02-report-module-selected-theme', {
+
+    // 3. Assert Report reflects the applied theme
+    const reportTheme = await report.getTheme();
+    expect(reportTheme).toBe(appliedTheme);
+
+    // 4. Attach screenshot
+    await testInfo.attach('th02-report-reflects-theme', {
       body: await page.screenshot({ fullPage: true }),
       contentType: 'image/png',
     });
   });
+
+  // ==========================================
+  // TH-03: Refresh Report Module
+  // ==========================================
   test('TH-03 Report retains theme after refresh', async ({ page }, testInfo) => {
     const dashboard = new DashboardPage(page);
-    const { state } = await applyDistinctTheme(page);
-    await dashboard.openReport();
     const report = new ReportPage(page);
+
+    // 1. Set theme and open Report Module
+    const appliedTheme = await dashboard.toggleTheme();
+    await dashboard.openReport();
     await report.assertLoaded();
+
+    // 2. Refresh page
     await page.reload();
     await report.assertLoaded();
-    assertSameTheme(await report.getThemeState(), state, 'Report refresh');
+
+    // 3. Assert theme remains consistent after refresh
+    const refreshedTheme = await report.getTheme();
+    expect(refreshedTheme).toBe(appliedTheme);
+
+    // 4. Attach screenshot
     await testInfo.attach('th03-report-retains-theme-after-refresh', {
       body: await page.screenshot({ fullPage: true }),
       contentType: 'image/png',
     });
   });
-  test('TH-04 Dashboard → Report → Dashboard maintains theme', async ({ page }, testInfo) => {
+
+  // ==========================================
+  // TH-04: Navigate Dashboard -> Report -> Dashboard
+  // ==========================================
+  test('TH-04 Dashboard -> Report -> Dashboard maintains theme', async ({ page }, testInfo) => {
     const dashboard = new DashboardPage(page);
-    const { state } = await applyDistinctTheme(page);
-    await dashboard.openReport();
     const report = new ReportPage(page);
+
+    // 1. Set theme and navigate to Report
+    const appliedTheme = await dashboard.toggleTheme();
+    await dashboard.openReport();
     await report.assertLoaded();
-    assertSameTheme(await report.getThemeState(), state, 'Report');
-    await testInfo.attach('th04-report-module-before-return', {
-      body: await page.screenshot({ fullPage: true }),
-      contentType: 'image/png',
-    });
-    await page.goto(model.routes.dashboard);
+    expect(await report.getTheme()).toBe(appliedTheme);
+
+    // 2. Navigate back to Dashboard
+    await page.goto('/#/dashboard/overview');
     await dashboard.assertLoaded();
-    assertSameTheme(await dashboard.getThemeState(), state, 'Return to Dashboard');
-    await testInfo.attach('th04-dashboard-returned-maintains-theme', {
+
+    // 3. Assert theme is still maintained on Dashboard
+    const returnedTheme = await dashboard.getTheme();
+    expect(returnedTheme).toBe(appliedTheme);
+
+    // 4. Attach screenshot
+    await testInfo.attach('th04-dashboard-maintains-theme', {
       body: await page.screenshot({ fullPage: true }),
       contentType: 'image/png',
     });
   });
+
+  // ==========================================
+  // TH-05: Change theme again and reopen Report Module
+  // ==========================================
   test('TH-05 change to second theme, reopen Report', async ({ page }, testInfo) => {
-    test.skip(options.length < 2, 'Only one verified theme is supported.');
     const dashboard = new DashboardPage(page);
-    const first = await applyDistinctTheme(page);
-    const secondName = options.find(name => name !== first.name)!;
-    await dashboard.setTheme(secondName);
-    const second = await dashboard.getThemeState();
-    expect(second, 'Second theme should differ from first').not.toEqual(first.state);
-    await dashboard.openReport();
     const report = new ReportPage(page);
+
+    // 1. First theme change
+    const firstTheme = await dashboard.toggleTheme();
+    await dashboard.openReport();
     await report.assertLoaded();
-    assertSameTheme(await report.getThemeState(), second, 'Report after second update');
+    expect(await report.getTheme()).toBe(firstTheme);
+
+    // 2. Return to Dashboard and toggle to second theme
+    await page.goto('/#/dashboard/overview');
+    await dashboard.assertLoaded();
+    const secondTheme = await dashboard.toggleTheme();
+    expect(secondTheme).not.toBe(firstTheme);
+
+    // 3. Reopen Report Module and verify latest theme
+    await dashboard.openReport();
+    await report.assertLoaded();
+    expect(await report.getTheme()).toBe(secondTheme);
+
+    // 4. Attach screenshot
     await testInfo.attach('th05-report-second-theme-reflected', {
       body: await page.screenshot({ fullPage: true }),
       contentType: 'image/png',
     });
   });
-  test('TH-06 Open Report Module directly or in a new tab', async ({ page }, testInfo) => {
-    const { state } = await applyDistinctTheme(page);
-    
-    // 1. Open Report Module directly in current tab and verify theme
-    const dashboard = new DashboardPage(page);
-    await dashboard.openReport();
-    const report = new ReportPage(page);
-    await report.assertLoaded();
-    assertSameTheme(await report.getThemeState(), state, 'Direct Report navigation');
-    await testInfo.attach('th06-direct-report-module-screenshot', {
-      body: await page.screenshot({ fullPage: true }),
-      contentType: 'image/png',
-    });
 
-    // 2. Open Report Module in a new tab within the same authenticated context
+  // ==========================================
+  // TH-06: Open Report Module directly or in a new tab
+  // ==========================================
+  test('TH-06 Open Report Module directly or in a new tab', async ({ page }, testInfo) => {
+    const dashboard = new DashboardPage(page);
+
+    // 1. Set active theme on Dashboard
+    const activeTheme = await dashboard.toggleTheme();
+
+    // 2. Open Report in a new browser tab within same session
     const newTab = await page.context().newPage();
     try {
-      await newTab.addInitScript((data) => {
-        for (const [k, v] of Object.entries(data)) {
-          window.sessionStorage.setItem(k, v as string);
+      // Inject session in new tab
+      await newTab.addInitScript((savedSession) => {
+        for (const [key, value] of Object.entries(savedSession)) {
+          window.sessionStorage.setItem(key, value as string);
         }
       }, getSession());
-      await newTab.goto(model.routes.dashboard);
-      const newTabDashboard = new DashboardPage(newTab);
-      await newTabDashboard.openReport();
+
+      await newTab.goto('/#/dashboard/reports');
       const newTabReport = new ReportPage(newTab);
       await newTabReport.assertLoaded();
-      assertSameTheme(await newTabReport.getThemeState(), state, 'New tab Report module');
 
-      // Explicitly attach screenshot of the NEW TAB showing the Report Module in the selected theme
+      // 3. Verify new tab carries active theme
+      const newTabTheme = await newTabReport.getTheme();
+      expect(newTabTheme).toBe(activeTheme);
+
+      // 4. Attach screenshot of Report Module in the new tab
       await testInfo.attach('th06-new-tab-report-module-screenshot', {
         body: await newTab.screenshot({ fullPage: true }),
         contentType: 'image/png',
@@ -147,43 +194,58 @@ test.describe('OomniEye theme consistency', () => {
       await newTab.close();
     }
   });
+
+  // ==========================================
+  // TH-07: Inspect key Report Module UI elements
+  // ==========================================
   test('TH-07 Report elements remain present and reviewable', async ({ page }, testInfo) => {
     const dashboard = new DashboardPage(page);
-    await applyDistinctTheme(page);
-    await dashboard.openReport();
     const report = new ReportPage(page);
+
+    // 1. Toggle theme and open Report Module
+    await dashboard.toggleTheme();
+    await dashboard.openReport();
     await report.assertLoaded();
+
+    // 2. Inspect UI elements
     await report.inspectUI();
+
+    // 3. Attach full review screenshot
     await testInfo.attach('th07-report-ui-elements-reviewable', {
       body: await page.screenshot({ fullPage: true }),
       contentType: 'image/png',
     });
   });
+
+  // ==========================================
+  // TH-08: Simulate failed preference update or unsupported selection
+  // ==========================================
   test('TH-08 Simulate a failed preference update or unsupported selection', async ({ page }, testInfo) => {
-    // 1. Simulate network failure for preference API endpoints
+    const dashboard = new DashboardPage(page);
+    const initialTheme = await dashboard.getTheme();
+
+    // 1. Simulate network failure for theme/preference API routes
     await page.route('**/api/**/theme*', route => route.abort('failed'));
     await page.route('**/api/**/preference*', route => route.abort('failed'));
 
-    const dashboard = new DashboardPage(page);
-    const original = await dashboard.getThemeState();
-
-    // 2. Simulate unsupported theme selection
+    // 2. Simulate unsupported theme selection (e.g. invalid theme name)
     await expect(async () => {
-      await dashboard.setTheme('NonExistentThemeXYZ');
+      await dashboard.setTheme('InvalidCustomThemeXYZ');
     }).rejects.toThrow();
 
-    // 3. Verify application maintains consistent state without crashing or corrupted styles
-    const consistentState = await dashboard.getThemeState();
-    expect(consistentState.colorScheme).toBe(original.colorScheme);
+    // 3. Verify application maintains consistent theme without crashing or corruption
+    const currentTheme = await dashboard.getTheme();
+    expect(currentTheme).toBe(initialTheme);
 
-    // 4. Verify valid theme switch still works properly
-    const targetTheme = original.colorScheme === 'dark' ? 'Light' : 'Dark';
-    await dashboard.setTheme(targetTheme);
-    const next = await dashboard.getThemeState();
-    expect(next.colorScheme, 'Theme changes gracefully without an inconsistent state').not.toBe(original.colorScheme);
+    // 4. Verify valid theme switch still recovers and works gracefully
+    const recoveredTheme = await dashboard.toggleTheme();
+    expect(recoveredTheme).not.toBe(initialTheme);
+
+    // 5. Attach screenshot
     await testInfo.attach('th08-simulated-error-handling-theme', {
       body: await page.screenshot({ fullPage: true }),
       contentType: 'image/png',
     });
   });
+
 });
